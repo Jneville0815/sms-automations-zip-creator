@@ -20,7 +20,44 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: install-and-deploy
-        run: |
-          $(git diff-tree --no-commit-id --name-only -r $(git rev-parse HEAD) -- '***.py')
+      - id: files
+        uses: jitterbit/get-changed-files@v1
+      - run: |
+          export MAIN_PROJECT_FOLDER=$(pwd)
+          mkdir $MAIN_PROJECT_FOLDER/zip_files
+          cd $MAIN_PROJECT_FOLDER/all_scripts
 
+          for file in ${{ steps.files.outputs.added_modified }}; do
+            if [[ "$file" == *".py"* ]]; then
+              file=$(basename "$file")
+              zip_file=$(basename "$file" .py).zip
+              cp "$file" /root/.local/share/virtualenvs/all_python_deps-RrfDKKJ-/lib/python3.8/site-packages
+              cd /root/.local/share/virtualenvs/all_python_deps-RrfDKKJ-/lib/python3.8/site-packages
+              zip -r9q "$zip_file" *
+              mv "$zip_file" $MAIN_PROJECT_FOLDER/zip_files
+              rm "$file"
+              cd $MAIN_PROJECT_FOLDER/all_scripts
+            fi
+          done
+
+          ls -la $MAIN_PROJECT_FOLDER/zip_files
+          aws s3 cp $MAIN_PROJECT_FOLDER/zip_files s3://zip-files-sms-automations --recursive
+
+          for file in ${{ steps.files.outputs.removed }}; do
+            if [[ "$file" == *".py"* ]]; then
+              zip_file=$(basename "$file" .py).zip
+              aws s3 rm s3://zip-files-sms-automations/$zip_file
+            fi
+          done
+
+          aws s3 cp $MAIN_PROJECT_FOLDER/json_variables.tfvars.json s3://zip-files-sms-automations
+
+        shell: bash
+
+      - name: trigger-sms-automations
+        run: |
+          curl -H "Accept: application/vnd.github.everest-preview+json" \
+               -H "Authorization: token ${{ secrets.TRIGGERED_RUN_TOKEN }}" \
+               --request POST \
+               --data '{"event_type": "triggered-run"}' \
+               https://api.github.com/repos/Jneville0815/sms-automations/dispatches
