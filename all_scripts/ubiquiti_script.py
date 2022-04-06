@@ -17,10 +17,10 @@ def lambda_handler(event, context):
             'name': 'camera-g4-instant',
             'id': '7008238501977'
         },
-        # {
-        #     'name': 'uvc-g4-doorbell',
-        #     'id': '4684279218265'
-        # },
+        {
+            'name': 'uvc-g4-doorbell',
+            'id': '4684279218265'
+        },
     ]
 
     for product in all_products:
